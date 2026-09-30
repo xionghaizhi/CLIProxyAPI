@@ -1,0 +1,146 @@
+name: custom-cnb-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable CNB image tag
+        required: true
+        type: string
+      deploy:
+        description: Deploy after the image is pushed
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-cnb-deploy
+  cancel-in-progress: false
+
+env:
+  CNB_REGISTRY: docker.cnb.cool
+  CNB_IMAGE: docker.cnb.cool/product-warehouse/docker/cliproxyapi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_ref: ${{ steps.metadata.outputs.image_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Test deployment script
+        run: bash .github/scripts/deploy-custom-image_test.sh
+
+      - name: Validate image metadata
+        id: metadata
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "Invalid Docker image tag: $IMAGE_TAG" >&2
+            exit 1
+          fi
+          image_ref="${CNB_IMAGE}:${IMAGE_TAG}"
+          {
+            echo "image_ref=$image_ref"
+            echo "version=$IMAGE_TAG"
+            echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Login to CNB
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CNB_REGISTRY }}
+          username: cnb
+          password: ${{ secrets.CNB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ steps.metadata.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.metadata.outputs.build_date }}
+          tags: ${{ steps.metadata.outputs.image_ref }}
+
+  deploy-canary:
+    if: ${{ inputs.deploy }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment script
+        uses: actions/checkout@v6
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.CPA_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.CPA_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/cpa_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cpa_deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy canary
+        env:
+          IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+          REGISTRY_HOST: ${{ env.CNB_REGISTRY }}
+          REGISTRY_USERNAME: cnb
+          REGISTRY_TOKEN: ${{ secrets.CNB_TOKEN }}
+          DEPLOY_HOST: ${{ vars.CPA_CANARY_HOST }}
+          DEPLOY_USER: ${{ vars.CPA_DEPLOY_USER }}
+          DEPLOY_DIR: ${{ vars.CPA_CANARY_DEPLOY_DIR }}
+          COMPOSE_FILE: ${{ vars.CPA_CANARY_COMPOSE_FILE }}
+          HEALTH_URL: ${{ vars.CPA_CANARY_HEALTH_URL }}
+          SSH_KEY_PATH: ${{ runner.temp }}/cpa_deploy
+        run: bash .github/scripts/deploy-custom-image.sh
+
+  deploy-secondary:
+    if: ${{ inputs.deploy }}
+    needs: [build, deploy-canary]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment script
+        uses: actions/checkout@v6
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.CPA_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.CPA_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/cpa_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cpa_deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy secondary
+        env:
+          IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+          REGISTRY_HOST: ${{ env.CNB_REGISTRY }}
+          REGISTRY_USERNAME: cnb
+          REGISTRY_TOKEN: ${{ secrets.CNB_TOKEN }}
+          DEPLOY_HOST: ${{ vars.CPA_SECONDARY_HOST }}
+          DEPLOY_USER: ${{ vars.CPA_DEPLOY_USER }}
+          DEPLOY_DIR: ${{ vars.CPA_SECONDARY_DEPLOY_DIR }}
+          COMPOSE_FILE: ${{ vars.CPA_SECONDARY_COMPOSE_FILE }}
+          HEALTH_URL: ${{ vars.CPA_SECONDARY_HEALTH_URL }}
+          SSH_KEY_PATH: ${{ runner.temp }}/cpa_deploy
+        run: bash .github/scripts/deploy-custom-image.sh

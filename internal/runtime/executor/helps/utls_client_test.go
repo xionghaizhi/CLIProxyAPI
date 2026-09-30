@@ -59,6 +59,12 @@ type trackedNetConn struct {
 	closeCount atomic.Int32
 }
 
+func TestChatGPTClientHelloUsesSafariProfile(t *testing.T) {
+	if !reflect.DeepEqual(chatGPTClientHelloID, tls.HelloSafari_Auto) {
+		t.Fatalf("ChatGPT ClientHello = %#v, want %#v", chatGPTClientHelloID, tls.HelloSafari_Auto)
+	}
+}
+
 func (c *trackedNetConn) Close() error {
 	c.closeCount.Add(1)
 	return c.Conn.Close()
@@ -394,7 +400,7 @@ func TestFallbackRoundTripperSelectsProviderFingerprint(t *testing.T) {
 	}
 	roundTripper := &fallbackRoundTripper{
 		anthropic: route("anthropic"),
-		chrome:    route("chrome"),
+		chatGPT:   route("chatgpt"),
 		fallback:  route("fallback"),
 	}
 	tests := []struct {
@@ -407,7 +413,7 @@ func TestFallbackRoundTripperSelectsProviderFingerprint(t *testing.T) {
 		{name: "Anthropic custom port", url: "https://api.anthropic.com:8443/v1/messages", want: "fallback"},
 		{name: "Anthropic userinfo", url: "https://caller@api.anthropic.com/v1/messages", want: "fallback"},
 		{name: "Anthropic lookalike", url: "https://api.anthropic.com.example/v1/messages", want: "fallback"},
-		{name: "ChatGPT HTTPS", url: "https://chatgpt.com/backend-api/codex/responses", want: "chrome"},
+		{name: "ChatGPT HTTPS", url: "https://chatgpt.com/backend-api/codex/responses", want: "chatgpt"},
 		{name: "Other HTTPS", url: "https://example.com/v1/messages", want: "fallback"},
 		{name: "Anthropic HTTP", url: "http://api.anthropic.com/v1/messages", want: "fallback"},
 	}

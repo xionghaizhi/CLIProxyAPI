@@ -22,12 +22,14 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-// utlsRoundTripper implements http.RoundTripper using a Chrome fingerprint for
+// utlsRoundTripper implements http.RoundTripper using a Safari fingerprint for
 // providers that require a browser-like TLS and HTTP/2 transport. Each request
 // gets a dedicated connection that is closed with the response body.
 type utlsRoundTripper struct {
 	dialer proxy.Dialer
 }
+
+var chatGPTClientHelloID = tls.HelloSafari_Auto
 
 type closeConnectionBody struct {
 	io.ReadCloser
@@ -78,7 +80,7 @@ func (t *utlsRoundTripper) createConnection(ctx context.Context, host, addr stri
 	}
 
 	tlsConfig := &tls.Config{ServerName: host}
-	tlsConn := tls.UClient(conn, tlsConfig, tls.HelloChrome_Auto)
+	tlsConn := tls.UClient(conn, tlsConfig, chatGPTClientHelloID)
 
 	if errHandshake := tlsConn.HandshakeContext(ctx); errHandshake != nil {
 		if errors.Is(errHandshake, context.Canceled) || errors.Is(errHandshake, context.DeadlineExceeded) {
@@ -348,7 +350,7 @@ func newClaudeCodeRoundTripper(proxyURL string) http.RoundTripper {
 // HTTPS hosts and falls back to the standard transport for all other requests.
 type fallbackRoundTripper struct {
 	anthropic http.RoundTripper
-	chrome    http.RoundTripper
+	chatGPT   http.RoundTripper
 	fallback  http.RoundTripper
 }
 
@@ -357,14 +359,14 @@ func (f *fallbackRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 		return f.anthropic.RoundTrip(req)
 	}
 	if req.URL.Scheme == "https" && strings.EqualFold(req.URL.Hostname(), "chatgpt.com") {
-		return f.chrome.RoundTrip(req)
+		return f.chatGPT.RoundTrip(req)
 	}
 	return f.fallback.RoundTrip(req)
 }
 
 // NewUtlsHTTPClient creates an HTTP client using provider-specific TLS
 // fingerprints for protected hosts. It uses Claude Code's Node/OpenSSL profile
-// for Anthropic and a Chrome profile for ChatGPT, with a standard-transport
+// for Anthropic and a Safari profile for ChatGPT, with a standard-transport
 // fallback for other hosts.
 func NewUtlsHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
 	proxyURL := effectiveProxyURL(ctx, cfg, auth)
@@ -374,7 +376,7 @@ func NewUtlsHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyau
 		ctxRoundTripper, _ = ctx.Value("cliproxy.roundtripper").(http.RoundTripper)
 	}
 
-	var chromeRT http.RoundTripper = newUtlsRoundTripper(proxyURL)
+	var chatGPTRT http.RoundTripper = newUtlsRoundTripper(proxyURL)
 	var anthropicRT http.RoundTripper = cachedClaudeCodeRoundTripper(proxyURL)
 	var standardTransport http.RoundTripper = http.DefaultTransport
 	if proxyURL != "" {
@@ -382,7 +384,7 @@ func NewUtlsHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyau
 			standardTransport = transport
 		}
 	} else if ctxRoundTripper != nil {
-		chromeRT = ctxRoundTripper
+		chatGPTRT = ctxRoundTripper
 		anthropicRT = ctxRoundTripper
 		standardTransport = ctxRoundTripper
 	}
@@ -390,7 +392,7 @@ func NewUtlsHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyau
 	client := &http.Client{
 		Transport: &fallbackRoundTripper{
 			anthropic: anthropicRT,
-			chrome:    chromeRT,
+			chatGPT:   chatGPTRT,
 			fallback:  standardTransport,
 		},
 	}
