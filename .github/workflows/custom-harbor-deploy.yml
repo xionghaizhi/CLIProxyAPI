@@ -29,6 +29,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Test deployment script
+        run: bash .github/scripts/deploy-custom-image_test.sh
+
       - name: Validate image metadata
         id: metadata
         env:
