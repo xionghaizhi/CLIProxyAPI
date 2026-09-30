@@ -2726,8 +2726,8 @@
       },
       "config": {
         "override_header": {
-          "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
-          "originator": "codex-tui"
+          "user-agent": "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)",
+          "originator": "Codex"
         }
       },
       "supportedInputModalities": [
@@ -3007,8 +3007,8 @@
       },
       "config": {
         "override_header": {
-          "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
-          "originator": "codex-tui"
+          "user-agent": "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)",
+          "originator": "Codex"
         }
       },
       "supportedInputModalities": [
@@ -3288,8 +3288,8 @@
       },
       "config": {
         "override_header": {
-          "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
-          "originator": "codex-tui"
+          "user-agent": "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)",
+          "originator": "Codex"
         }
       },
       "supportedInputModalities": [
@@ -3569,8 +3569,8 @@
       },
       "config": {
         "override_header": {
-          "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
-          "originator": "codex-tui"
+          "user-agent": "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)",
+          "originator": "Codex"
         }
       },
       "supportedInputModalities": [

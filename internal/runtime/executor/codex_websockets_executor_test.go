@@ -1095,11 +1095,11 @@ func TestApplyCodexWebsocketHeadersDefaultsToCurrentResponsesBeta(t *testing.T) 
 	if !strings.HasPrefix(codexUserAgent, codexOriginator+"/") {
 		t.Fatalf("default Codex User-Agent = %s, want prefix %s/", codexUserAgent, codexOriginator)
 	}
-	if !strings.HasPrefix(codexUserAgent, "codex-tui/") {
-		t.Fatalf("default Codex User-Agent = %s, want codex-tui prefix", codexUserAgent)
+	if !strings.HasPrefix(codexUserAgent, "Codex/") {
+		t.Fatalf("default Codex User-Agent = %s, want Codex prefix", codexUserAgent)
 	}
-	if !strings.Contains(codexUserAgent, "(codex-tui;") {
-		t.Fatalf("default Codex User-Agent = %s, want codex-tui suffix", codexUserAgent)
+	if !strings.Contains(codexUserAgent, "(Codex Desktop;") {
+		t.Fatalf("default Codex User-Agent = %s, want Codex Desktop suffix", codexUserAgent)
 	}
 	if got := headers.Get("Originator"); got != codexOriginator {
 		t.Fatalf("Originator = %s, want %s", got, codexOriginator)
@@ -1807,7 +1807,7 @@ func TestApplyCodexWebsocketHeaders_EmptyAPIKey_OmitsAuthorizationAndOAuthHeader
 }
 
 func TestApplyModelHeaderOverridesFromModelConfig(t *testing.T) {
-	const wantUA = "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)"
+	const wantUA = "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)"
 	req, err := http.NewRequest(http.MethodPost, "https://example.com/responses", nil)
 	if err != nil {
 		t.Fatalf("NewRequest() error = %v", err)
@@ -1868,6 +1868,55 @@ func TestApplyModelHeaderOverridesMultipleHeaders(t *testing.T) {
 	}
 	if got := headers.Get("X-Test-Header"); got != "forced-value" {
 		t.Fatalf("X-Test-Header = %q, want forced-value", got)
+	}
+}
+
+func TestApplyFinalCodexIdentityHeadersReappliesEnabledCloaking(t *testing.T) {
+	reg := registry.GetGlobalRegistry()
+	clientID := "test-final-codex-identity"
+	modelID := "test-final-codex-identity-model"
+	reg.RegisterClient(clientID, "codex", []*registry.ModelInfo{{
+		ID: modelID,
+		Config: &registry.ModelConfig{OverrideHeader: map[string]string{
+			"user-agent": "catalog-ua",
+			"originator": "catalog-originator",
+		}},
+	}})
+	t.Cleanup(func() { reg.UnregisterClient(clientID) })
+
+	headers := http.Header{}
+	applyFinalCodexIdentityHeaders(headers, modelID, &config.Config{}, &cliproxyauth.Auth{Provider: "codex"})
+
+	if got := headers.Get("User-Agent"); got != codexUserAgent {
+		t.Fatalf("User-Agent = %q, want %q", got, codexUserAgent)
+	}
+	if got := headers.Get("Originator"); got != codexOriginator {
+		t.Fatalf("Originator = %q, want %q", got, codexOriginator)
+	}
+}
+
+func TestApplyFinalCodexIdentityHeadersPreservesOverridesWhenCloakingDisabled(t *testing.T) {
+	reg := registry.GetGlobalRegistry()
+	clientID := "test-disabled-final-codex-identity"
+	modelID := "test-disabled-final-codex-identity-model"
+	reg.RegisterClient(clientID, "codex", []*registry.ModelInfo{{
+		ID: modelID,
+		Config: &registry.ModelConfig{OverrideHeader: map[string]string{
+			"user-agent": "catalog-ua",
+			"originator": "catalog-originator",
+		}},
+	}})
+	t.Cleanup(func() { reg.UnregisterClient(clientID) })
+
+	headers := http.Header{}
+	cfg := &config.Config{Codex: config.CodexConfig{DisableCodexCloaking: true}}
+	applyFinalCodexIdentityHeaders(headers, modelID, cfg, &cliproxyauth.Auth{Provider: "codex"})
+
+	if got := headers.Get("User-Agent"); got != "catalog-ua" {
+		t.Fatalf("User-Agent = %q, want catalog-ua", got)
+	}
+	if got := headers.Get("Originator"); got != "catalog-originator" {
+		t.Fatalf("Originator = %q, want catalog-originator", got)
 	}
 }
 

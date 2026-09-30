@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	codexUserAgent             = "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)"
-	codexOriginator            = "codex-tui"
+	codexUserAgent             = "Codex/0.159.0 (Mac OS 15.8.0; arm64) unknown (Codex Desktop; 26.928.20755)"
+	codexOriginator            = "Codex"
 	codexDefaultImageToolModel = "gpt-image-2"
 	codexResponsesLiteHeader   = "X-OpenAI-Internal-Codex-Responses-Lite"
 )
@@ -170,6 +170,13 @@ func applyModelHeaderOverrides(headers http.Header, modelName string) {
 	if strings.Contains(headers.Get("User-Agent"), "Mac OS") && codexSessionHeaderValue(headers) == "" {
 		headers.Set("Session_id", uuid.NewString())
 	}
+}
+
+// Model metadata refreshes can restore upstream identity defaults. Reapply
+// cloaking last so this build's Codex identity remains stable unless disabled.
+func applyFinalCodexIdentityHeaders(headers http.Header, modelName string, cfg *config.Config, auth *cliproxyauth.Auth) {
+	applyModelHeaderOverrides(headers, modelName)
+	applyCodexCloakingHeaders(headers, cfg, auth)
 }
 
 // applyCodexDirectImageHeaders sets Codex upstream headers for direct /images/* calls.
