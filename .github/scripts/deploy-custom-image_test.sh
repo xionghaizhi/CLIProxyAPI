@@ -27,7 +27,7 @@ cat > "$test_dir/docker" <<'EOF'
 if [[ "$1" == compose && " $* " == *" ps -q cli-proxy-api "* ]]; then
   echo "current-container"
 elif [[ "$1" == inspect && "${!#}" == current-container ]]; then
-  echo "harbor.example.test/cpa/cli-proxy-api:previous"
+  echo "docker.cnb.cool/product-warehouse/docker/cliproxyapi:previous"
 fi
 EOF
 
@@ -47,13 +47,10 @@ mkdir "$test_dir/deploy"
 export SSH_TEST_LOG="$test_dir/ssh.log"
 export DOCKER_TEST_LOG="$test_dir/docker.log"
 export PATH="$test_dir:$PATH"
-export IMAGE_REF="harbor.example.test/cpa/cli-proxy-api:test"
-export HARBOR_REGISTRY="harbor.example.test"
-# The dollar sign is part of the Harbor robot account name.
-# shellcheck disable=SC2016
-robot_username='robot$project+deployer'
-export HARBOR_USERNAME="$robot_username"
-export HARBOR_PASSWORD="test-password"
+export IMAGE_REF="docker.cnb.cool/product-warehouse/docker/cliproxyapi:test"
+export REGISTRY_HOST="docker.cnb.cool"
+export REGISTRY_USERNAME="cnb"
+export REGISTRY_TOKEN="test-token"
 export DEPLOY_HOST="127.0.0.1"
 export DEPLOY_USER="deployer"
 export DEPLOY_DIR="$test_dir/deploy"
@@ -66,14 +63,14 @@ if bash "$(dirname "$0")/deploy-custom-image.sh"; then
   exit 1
 fi
 
-grep -F "$robot_username" "$SSH_TEST_LOG" >/dev/null
-[[ "$(grep -c '^DOCKER_CONFIG=/tmp/cpa-harbor-manual-1 compose .* up ' "$DOCKER_TEST_LOG")" == 2 ]]
-grep -F 'DOCKER_CONFIG=/tmp/cpa-harbor-manual-1 pull harbor.example.test/cpa/cli-proxy-api:test' "$DOCKER_TEST_LOG" >/dev/null
+grep -F -- "--username 'cnb' --password-stdin" "$SSH_TEST_LOG" >/dev/null
+[[ "$(grep -c '^DOCKER_CONFIG=/tmp/cpa-registry-manual-1 compose .* up ' "$DOCKER_TEST_LOG")" == 2 ]]
+grep -F 'DOCKER_CONFIG=/tmp/cpa-registry-manual-1 pull docker.cnb.cool/product-warehouse/docker/cliproxyapi:test' "$DOCKER_TEST_LOG" >/dev/null
 
 cat > "$test_dir/expected-override.yml" <<'EOF'
 services:
   cli-proxy-api:
-    image: harbor.example.test/cpa/cli-proxy-api:previous
+    image: docker.cnb.cool/product-warehouse/docker/cliproxyapi:previous
     pull_policy: never
 EOF
 cmp "$test_dir/expected-override.yml" "$test_dir/deploy/.cpa-custom-image.override.yml"

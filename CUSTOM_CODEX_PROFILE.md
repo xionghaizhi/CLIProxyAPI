@@ -76,28 +76,27 @@ The plugin cannot change the TCP/TLS ClientHello. Existing deployments mount the
 9. Verify health, plugin loading, final logged headers, and a real Codex Responses request before deploying the second server.
 10. Record the deployed image digest and keep the previous image tag for rollback.
 
-## Harbor deployment
+## CNB image publishing and deployment
 
-`.github/workflows/custom-harbor-deploy.yml` builds `linux/amd64`, pushes an immutable tag to Harbor, and can deploy two hosts sequentially. It intentionally requires a self-hosted runner labelled `cpa-harbor`.
+Images are published only to `docker.cnb.cool/product-warehouse/docker/cliproxyapi`. Docker repository names must be lowercase, so the display name `CLIProxyAPI` cannot be used as the repository path.
 
-For an HTTP-only Harbor registry, configure the self-hosted runner and both Docker daemons with that registry in `insecure-registries`. HTTP sends registry credentials and image layers without transport encryption. Docker's [insecure registry documentation](https://docs.docker.com/reference/cli/dockerd/#insecure-registries) recommends this mode only for testing, so enable Harbor HTTPS before production automation. A private-network HTTP registry can be used as a temporary migration step only after accepting that risk.
+- `.github/workflows/docker-image.yml` publishes multi-architecture images when a `v*` tag is pushed.
+- `.github/workflows/custom-cnb-deploy.yml` manually builds `linux/amd64`, pushes an immutable tag, and can deploy two hosts sequentially.
 
-Required repository variables and secrets are listed in the workflow. Use a dedicated Harbor robot account and a restricted deployment SSH key; do not reuse a personal or server-administration key.
+CNB documents the registry username as the fixed lowercase value `cnb`. Store a CNB access token with `registry-package:rw` permission as the GitHub Actions repository secret `CNB_TOKEN`; never commit it. See the [CNB Docker registry documentation](https://docs.cnb.cool/zh/artifact/docker.html).
+
+Use a restricted deployment SSH key; do not reuse a personal or server-administration key.
 
 Repository variables:
 
-- `HARBOR_REGISTRY`: registry host and optional port, without `http://` or a path.
-- `HARBOR_PROJECT`
-- `HARBOR_IMAGE_NAME`
 - `CPA_DEPLOY_USER`
 - `CPA_CANARY_HOST`, `CPA_CANARY_DEPLOY_DIR`, `CPA_CANARY_COMPOSE_FILE`, `CPA_CANARY_HEALTH_URL`
 - `CPA_SECONDARY_HOST`, `CPA_SECONDARY_DEPLOY_DIR`, `CPA_SECONDARY_COMPOSE_FILE`, `CPA_SECONDARY_HEALTH_URL`
 
 Repository secrets:
 
-- `HARBOR_USERNAME`
-- `HARBOR_PASSWORD`
+- `CNB_TOKEN`
 - `CPA_DEPLOY_SSH_KEY`
 - `CPA_SSH_KNOWN_HOSTS`
 
-The workflow does not install a self-hosted runner, change Docker daemon security settings, upload an existing administration key, or create Harbor credentials. Those security-boundary changes must be completed separately before the workflow is enabled.
+The workflow does not upload an existing administration key or create a CNB access token. Those security-boundary changes must be completed separately before deployment is enabled.

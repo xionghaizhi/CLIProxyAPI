@@ -2,7 +2,7 @@
 set -euo pipefail
 
 required=(
-  IMAGE_REF HARBOR_REGISTRY HARBOR_USERNAME HARBOR_PASSWORD
+  IMAGE_REF REGISTRY_HOST REGISTRY_USERNAME REGISTRY_TOKEN
   DEPLOY_HOST DEPLOY_USER DEPLOY_DIR COMPOSE_FILE HEALTH_URL SSH_KEY_PATH
 )
 for name in "${required[@]}"; do
@@ -20,18 +20,18 @@ if [[ ! "$DEPLOY_DIR" =~ ^/[A-Za-z0-9._/-]+$ || ! "$COMPOSE_FILE" =~ ^[A-Za-z0-9
   echo "Invalid deployment directory or Compose filename" >&2
   exit 1
 fi
-if [[ ! "$IMAGE_REF" =~ ^[A-Za-z0-9._:/-]+$ || ! "$HARBOR_REGISTRY" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
-  echo "Invalid image reference or Harbor registry" >&2
+if [[ ! "$IMAGE_REF" =~ ^[A-Za-z0-9._:/-]+$ || ! "$REGISTRY_HOST" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+  echo "Invalid image reference or registry host" >&2
   exit 1
 fi
-if [[ ! "$HARBOR_USERNAME" =~ ^[-A-Za-z0-9._@+\$]+$ || ! "$HEALTH_URL" =~ ^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9._/-]*$ ]]; then
-  echo "Invalid Harbor username or health URL" >&2
+if [[ ! "$REGISTRY_USERNAME" =~ ^[-A-Za-z0-9._@+\$]+$ || ! "$HEALTH_URL" =~ ^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9._/-]*$ ]]; then
+  echo "Invalid registry username or health URL" >&2
   exit 1
 fi
 
 ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
 ssh_args=(-i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=yes)
-remote_docker_config="/tmp/cpa-harbor-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+remote_docker_config="/tmp/cpa-registry-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
 
 cleanup() {
   # Validated values are intentionally expanded before the remote shell runs.
@@ -45,8 +45,8 @@ trap cleanup EXIT
 ssh "${ssh_args[@]}" "$ssh_target" "install -d -m 700 '$remote_docker_config'"
 # Validated values are intentionally expanded before the remote shell runs.
 # shellcheck disable=SC2029
-printf '%s' "$HARBOR_PASSWORD" | ssh "${ssh_args[@]}" "$ssh_target" \
-  "DOCKER_CONFIG='$remote_docker_config' docker login '$HARBOR_REGISTRY' --username '$HARBOR_USERNAME' --password-stdin"
+printf '%s' "$REGISTRY_TOKEN" | ssh "${ssh_args[@]}" "$ssh_target" \
+  "DOCKER_CONFIG='$remote_docker_config' docker login '$REGISTRY_HOST' --username '$REGISTRY_USERNAME' --password-stdin"
 
 ssh "${ssh_args[@]}" "$ssh_target" bash -s -- \
   "$DEPLOY_DIR" "$COMPOSE_FILE" "$IMAGE_REF" "$HEALTH_URL" "$remote_docker_config" <<'REMOTE'
